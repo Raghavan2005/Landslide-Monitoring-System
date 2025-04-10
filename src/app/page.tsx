@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { AlertTriangle, CloudRain, Layers, Activity, ThermometerSun, BarChart2, Map } from 'lucide-react';
 import ImageUploadSection from './ImageUploadSection';
+import TerrainMap from './Google3DMap';
+import 'maplibre-gl/dist/maplibre-gl.css';
 
 // Mock data for demonstration
 const generateMockData = (days = 7) => {
@@ -130,7 +132,6 @@ Town in Tamil Nadu</p>
             </div>
             <div className="flex items-center">
               <AlertTriangle className={`h-6 w-6 ${riskColor} mr-2`} />
-              <span className={`text-xl font-bold ${riskColor}`}>{riskLevel} Risk</span>
             </div>
           </div>
         </div>
@@ -267,9 +268,11 @@ Town in Tamil Nadu</p>
             <Map className="h-5 w-5 text-blue-600 mr-2" />
             <h2 className="text-lg font-semibold text-gray-700">Monitoring Location</h2>
           </div>
-          <div className="bg-gray-100 rounded-lg h-64 flex items-center justify-center">
+          <div className='bg-white p-10 rounded-[20px]' >
             <div className="text-center text-gray-500">
-           
+            <div style={{ height: '100vh', width: '100%' }}>
+      <TerrainMap />
+    </div>
 
 
             </div>
