@@ -78,8 +78,61 @@ export default function TerrainMap() {
         })
       );
 
+      // 🌍 Add marker for Ooty
+      new maplibregl.Marker({ color: 'green' })
+      .setLngLat([11.39085, 47.27574])
+      .setPopup(new maplibregl.Popup({ offset: 25 }).setText('Ooty (Control Point)'))
+      .addTo(map);
+    
+    new maplibregl.Marker({ color: 'red' })
+      .setLngLat([11.35962, 47.26204])
+      .setPopup(new maplibregl.Popup({ offset: 25 }).setText('Ooty (Point 1)'))
+      .addTo(map);
+    
+      new maplibregl.Marker({ color: 'red' })
+      .setLngLat([11.34083,47.26925])
+      .setPopup(new maplibregl.Popup({ offset: 25 }).setText('Ooty (Point 2)'))
+      .addTo(map);
       mapInstance.current = map;
-    }
+    
+    new maplibregl.Marker({ color: 'red' })
+    .setLngLat([11.422258,47.284831])
+    .setPopup(new maplibregl.Popup({ offset: 25 }).setText('Ooty (Point 3)'))
+    .addTo(map);
+    mapInstance.current = map;
+    new maplibregl.Marker({ color: 'yellow' })
+    .setLngLat([ 11.417685,47.304474])
+    .setPopup(new maplibregl.Popup({ offset: 25 }).setText('Ooty (Tracker 1)'))
+    .addTo(map);
+    mapInstance.current = map;
+    new maplibregl.Marker({ color: 'yellow' })
+    .setLngLat([ 11.396225,47.294980])
+    .setPopup(new maplibregl.Popup({ offset: 25 }).setText('Ooty (Tracker 2)'))
+    .addTo(map);
+    mapInstance.current = map;
+    new maplibregl.Marker({ color: 'yellow' })
+    .setLngLat([ 11.374076,47.291477
+
+    ])
+    .setPopup(new maplibregl.Popup({ offset: 25 }).setText('Ooty (Tracker 3)'))
+    .addTo(map);
+    mapInstance.current = map;
+    new maplibregl.Marker({ color: 'yellow' })
+    .setLngLat([ 11.337176,47.286339
+
+    ])
+    .setPopup(new maplibregl.Popup({ offset: 25 }).setText('Ooty (Tracker 4)'))
+    .addTo(map);
+    mapInstance.current = map;
+
+    new maplibregl.Marker({ color: 'yellow' })
+    .setLngLat([11.341259, 47.275259
+
+    ])
+    .setPopup(new maplibregl.Popup({ offset: 25 }).setText('Ooty (Tracker 5)'))
+    .addTo(map);
+    mapInstance.current = map;
+  }
   }, []);
 
   return <div ref={mapContainer} style={{ height: '100vh', width: '100%' }} />;

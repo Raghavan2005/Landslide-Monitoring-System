@@ -1,9 +1,9 @@
 const express = require('express');
 const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
-
+const cors = require('cors');
 const app = express();
-const PORT = 3000;
+const PORT = 4000;
 
 let latestESP32Data = ''; // Store the latest serial data
 
@@ -57,7 +57,29 @@ async function connectToESP32() {
   }
 }
 
-// REST API endpoint
+// Dummy sensor data generator
+function generateSensorData() {
+  const now = new Date();
+  return {
+    date: now.toLocaleDateString(),
+    time: now.toLocaleTimeString(),
+    soilMoisture: 30 + Math.random() * 20,
+    displacement: Math.random() * 5,
+    rainfall: Math.random() * 30,
+    vibration: Math.random() * 15,
+    temperature: 18 + Math.random() * 12,
+  };
+}
+
+app.use(cors());
+
+// Dummy endpoint
+app.get('/api/sensor-data', (req, res) => {
+  const data = generateSensorData();
+  res.json(data);
+});
+
+// Endpoint to get latest ESP32 data
 app.get('/data', (req, res) => {
   res.json({ esp32: latestESP32Data });
 });
@@ -65,5 +87,13 @@ app.get('/data', (req, res) => {
 // Start server
 app.listen(PORT, () => {
   console.log(`🌐 Server is running at http://localhost:${PORT}`);
-  connectToESP32();
+  // Uncomment this if you want to read from ESP32
+  // connectToESP32();
+  (async () => {
+    try {
+      await connectToESP32();
+    } catch (error) {
+      console.error('⚠️ Failed to connect to ESP32, but server is still running.');
+    }
+  })();
 });

@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect } from 'react';
+import { useState, useEffect ,useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { AlertTriangle, CloudRain, Layers, Activity, ThermometerSun, BarChart2, Map } from 'lucide-react';
 import ImageUploadSection from './ImageUploadSection';
@@ -30,10 +30,10 @@ const generateMockData = (days = 7) => {
 
 // Alert thresholds
 const THRESHOLDS = {
-  soilMoisture: 45,
-  displacement: 3.5,
-  rainfall: 25,
-  vibration: 12,
+  soilMoisture: 55,
+  displacement: 5.5,
+  rainfall: 55,
+  vibration: 42,
 };
 
 export default function LandslideMonitoringDashboard() {
@@ -42,48 +42,72 @@ export default function LandslideMonitoringDashboard() {
   const [riskColor, setRiskColor] = useState('text-green-500');
   
   // Update risk level based on latest sensor readings
+  const lastRiskLevelRef = useRef<string | null>(null);
+
   useEffect(() => {
+    if (sensorData.length === 0) return;
+  
     const latest = sensorData[sensorData.length - 1];
     let criticalFactors = 0;
-    
+  
     if (latest.soilMoisture > THRESHOLDS.soilMoisture) criticalFactors++;
     if (latest.displacement > THRESHOLDS.displacement) criticalFactors++;
     if (latest.rainfall > THRESHOLDS.rainfall) criticalFactors++;
     if (latest.vibration > THRESHOLDS.vibration) criticalFactors++;
-    
+  
+    let newRiskLevel = 'Low';
+    let newRiskColor = 'text-green-500';
+    let alertMessage = '';
+    let soundFile = '';
+  
     if (criticalFactors >= 3) {
-      setRiskLevel('High');
-      setRiskColor('text-red-500');
+      newRiskLevel = 'High';
+      newRiskColor = 'text-red-500';
+      soundFile = '/high.mp3';
+      alertMessage = '⚠️ Landslide Risk Level: HIGH!\nPlease take necessary precautions.';
     } else if (criticalFactors >= 1) {
-      setRiskLevel('Medium');
-      setRiskColor('text-yellow-500');
-    } else {
-      setRiskLevel('Low');
-      setRiskColor('text-green-500');
+      newRiskLevel = 'Medium';
+      newRiskColor = 'text-yellow-500';
+      soundFile = '/medium.mp3';
+      alertMessage = '⚠️ Risk Level: Medium\nStay alert.';
+    }
+  
+    setRiskLevel(newRiskLevel);
+    setRiskColor(newRiskColor);
+  
+    // Only play sound if risk level changed
+    if (lastRiskLevelRef.current !== newRiskLevel) {
+      if (soundFile) {
+        const alertSound = new Audio(soundFile);
+        alertSound.play().catch((e) => console.warn('Audio playback failed:', e));
+      }
+  
+      if (alertMessage) {
+        alert(alertMessage);
+      }
+  
+      lastRiskLevelRef.current = newRiskLevel;
     }
   }, [sensorData]);
   
   // Simulate real-time updates
   useEffect(() => {
-    const interval = setInterval(() => {
-      const newData = [...sensorData];
-      const latest = {...newData[newData.length - 1]};
-      
-      // Update with small random changes
-      latest.soilMoisture = Math.max(20, Math.min(60, latest.soilMoisture + (Math.random() - 0.5) * 2));
-      latest.displacement = Math.max(0, Math.min(10, latest.displacement + (Math.random() - 0.5) * 0.2));
-      latest.rainfall = Math.max(0, Math.min(50, latest.rainfall + (Math.random() - 0.5) * 3));
-      latest.vibration = Math.max(0, Math.min(20, latest.vibration + (Math.random() - 0.5) * 1));
-      latest.temperature = Math.max(10, Math.min(35, latest.temperature + (Math.random() - 0.5) * 0.5));
-      
-      newData.push(latest);
-      if (newData.length > 8) newData.shift();
-      
-      setSensorData(newData);
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch('http://localhost:4000/api/sensor-data');
+        const latest = await response.json();
+  
+        const newData = [...sensorData, latest];
+        if (newData.length > 8) newData.shift();
+        setSensorData(newData);
+      } catch (error) {
+        console.error('Error fetching sensor data:', error);
+      }
     }, 5000);
-    
+  
     return () => clearInterval(interval);
   }, [sensorData]);
+  
   
   // Format sensor reading with appropriate units
   const formatReading = (value, parameter) => {
@@ -101,7 +125,14 @@ export default function LandslideMonitoringDashboard() {
   const isAboveThreshold = (value, parameter) => {
     return THRESHOLDS[parameter] && value > THRESHOLDS[parameter];
   };
-  
+  const [time, setTime] = useState('');
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTime(new Date().toLocaleTimeString());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
   return (
     <main>
     <div className="bg-gray-50 min-h-screen text-black">
@@ -114,7 +145,7 @@ export default function LandslideMonitoringDashboard() {
           </div>
           <div className="flex items-center">
             <span className="bg-blue-800 px-3 py-1 rounded text-sm">
-              Last updated: {new Date().toLocaleTimeString()}
+              Last updated: {time}
             </span>
           </div>
         </div>
@@ -267,9 +298,14 @@ Town in Tamil Nadu</p>
           <div className="flex items-center mb-4">
             <Map className="h-5 w-5 text-blue-600 mr-2" />
             <h2 className="text-lg font-semibold text-gray-700">Monitoring Location</h2>
+
+            <div className=' ml-4 text-center bg-white p-2 rounded-[20px]'>
+            <p className="text-gray-500">Ooty, Tamil Nadu</p>
+            <p className="text-red-500">11.4102° N, 76.6950° E</p> 
+            </div>
           </div>
           <div className='bg-white p-10 rounded-[20px]' >
-            <div className="text-center text-gray-500">
+            <div className="text-center text-gray-500"> 
             <div style={{ height: '100vh', width: '100%' }}>
       <TerrainMap />
     </div>
