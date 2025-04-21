@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect ,useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { AlertTriangle, CloudRain, Layers, Activity, ThermometerSun, BarChart2, Map } from 'lucide-react';
+import { AlertTriangle, CloudRain, Layers, Activity, ThermometerSun, BarChart2, Map, BatteryFull } from 'lucide-react';
 import ImageUploadSection from './ImageUploadSection';
 import TerrainMap from './Google3DMap';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -30,7 +30,7 @@ const generateMockData = (days = 7) => {
 
 // Alert thresholds
 const THRESHOLDS = {
-  soilMoisture: 55,
+  soilMoisture: 35,
   displacement: 5.5,
   rainfall: 55,
   vibration: 42,
@@ -103,7 +103,7 @@ export default function LandslideMonitoringDashboard() {
       } catch (error) {
         console.error('Error fetching sensor data:', error);
       }
-    }, 5000);
+    }, 8000);
   
     return () => clearInterval(interval);
   }, [sensorData]);
@@ -157,7 +157,7 @@ export default function LandslideMonitoringDashboard() {
         <div className="mb-6 bg-white rounded-lg shadow p-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-gray-700">System Status <p className='text-red-600 animate-pulse'>Offline</p></h2>
+              <h2 className="text-lg font-semibold text-gray-700">System Status <p className='text-green-600 animate-pulse'>Online</p></h2>
               <p className="text-gray-500">Ooty
 Town in Tamil Nadu</p>
             </div>
@@ -168,40 +168,63 @@ Town in Tamil Nadu</p>
         </div>
         {/* Location Section - Replace with Image Upload */}
 <ImageUploadSection />
-        {/* Sensor Reading Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-          {Object.entries({
-            soilMoisture: { label: 'Soil Moisture', icon: <Layers /> },
-            displacement: { label: 'Displacement', icon: <Activity /> },
-            rainfall: { label: 'Rainfall', icon: <CloudRain /> },
-            vibration: { label: 'Vibration', icon: <Activity /> },
-            temperature: { label: 'Temperature', icon: <ThermometerSun /> },
-          }).map(([key, { label, icon }]) => {
-            const latestValue = sensorData[sensorData.length - 1][key];
-            const isAlert = isAboveThreshold(latestValue, key);
-            
-            return (
-              <div key={key} className={`bg-white rounded-lg shadow p-4 ${isAlert ? 'border-l-4 border-red-500' : ''}`}>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center text-gray-600">
-                    <span className="mr-2">{icon}</span>
-                    <h3 className="font-medium">{label}</h3>
-                  </div>
-                  {isAlert && <AlertTriangle className="h-5 w-5 text-red-500" />}
-                </div>
-                <p className="text-2xl font-bold">
-                  {formatReading(latestValue, key)}
-                </p>
-                <div className="mt-2 text-xs text-gray-500">
-                  {isAlert ? 
-                    <span className="text-red-500">Above threshold</span> : 
-                    <span>Normal range</span>
-                  }
-                </div>
-              </div>
-            );
-          })}
+       {/* Sensor Reading Cards */}
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+  {sensorData.length > 0 &&
+    Object.entries({
+      soilMoisture: { label: 'Soil Moisture', icon: <Layers /> },
+      displacement: { label: 'Displacement', icon: <Activity /> },
+      rainfall: { label: 'Rainfall', icon: <CloudRain /> },
+      vibration: { label: 'Vibration', icon: <Activity /> },
+      temperature: { label: 'Temperature', icon: <ThermometerSun /> },
+      mpu: { label: 'MPU Status', icon: <Activity /> },
+      gps: { label: 'GPS (Lat, Lon)', icon: <Activity /> },
+      batt: { label: 'Battery (V)', icon: <BatteryFull /> },
+    }).map(([key, { label, icon }]) => {
+      const latest = sensorData[sensorData.length - 1];
+
+      let value;
+      if (key === 'mpu') {
+        value = latest.esp32?.MPU ?? 'N/A';
+      } else if (key === 'gps') {
+        const lat = latest.esp32?.GPS?.lat ?? 0;
+        const lon = latest.esp32?.GPS?.lon ?? 0;
+        value = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+      } else if (key === 'batt') {
+        value = `${latest.esp32?.BATT?.toFixed(2) ?? 'N/A'}V`;
+      } else {
+        value = formatReading(latest[key], key);
+      }
+
+      const isAlert = isAboveThreshold(latest[key], key);
+
+      return (
+        <div
+          key={key}
+          className={`bg-white rounded-lg shadow p-4 transition-all duration-300 ${
+            isAlert ? 'border-l-4 border-red-500' : ''
+          }`}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center text-gray-600">
+              <span className="mr-2">{icon}</span>
+              <h3 className="font-medium">{label}</h3>
+            </div>
+            {isAlert && <AlertTriangle className="h-5 w-5 text-red-500" />}
+          </div>
+          <p className="text-2xl font-bold">{value}</p>
+          <div className="mt-2 text-xs text-gray-500">
+            {isAlert ? (
+              <span className="text-red-500">Above threshold</span>
+            ) : (
+              <span>Normal range</span>
+            )}
+          </div>
         </div>
+      );
+    })}
+</div>
+
         
         {/* Charts Section */}
         <div className="bg-white rounded-lg shadow p-4 mb-6">

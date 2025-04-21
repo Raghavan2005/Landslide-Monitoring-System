@@ -1,19 +1,14 @@
-#include <Wire.h>
-#include <Adafruit_MPU6050.h>
-#include <Adafruit_SSD1306.h>
-#include <Adafruit_Sensor.h>
-#include <TinyGPS++.h>
+
+
+// ====================================================================================
+// RECEIVER CODE (receiver.ino)
+// ====================================================================================
+
+#include <WiFi.h>
+#include <WebServer.h>
 #include <LoRa.h>
 
-// IMU (MPU6050)
-Adafruit_MPU6050 mpu;
-Adafruit_SSD1306 display = Adafruit_SSD1306(128, 64, &Wire);
-
-// GPS (Neo-6M) using HardwareSerial
-HardwareSerial mySerial(1); // Use Serial1 (you can use Serial2 or any other UART port)
-TinyGPSPlus gps;
-
-// LoRa pins
+// LoRa Pins - same as sender
 #define LORA_SCK 5
 #define LORA_MISO 19
 #define LORA_MOSI 27
@@ -21,91 +16,116 @@ TinyGPSPlus gps;
 #define LORA_RESET 14
 #define LORA_DIO0 26
 
+// WiFi credentials for Access Point
+const char* ap_ssid = "ESP_96E0BD";
+const char* ap_password = "";
+
+// Mode selector - must match the sender
+bool isLora = false;  // Set to true for LoRa, false for WiFi
+
+WebServer server(80);
+
 void setup() {
   Serial.begin(115200);
-  mySerial.begin(9600, SERIAL_8N1, 16, 17); // RX, TX (use correct pins)
+  Serial.println("ESP32 Receiver Starting...");
 
-  // Initialize IMU
-  if (!mpu.begin()) {
-    Serial.println("MPU6050 init failed");
-    while (1);
+  if (isLora) {
+    setupLoraReceiver();
+  } else {
+    setupWifiReceiver();
   }
-  Serial.println("MPU6050 found");
-
-  // Initialize LoRa
-  if (!LoRa.begin(915E6)) {
-    Serial.println("LoRa init failed");
-    while (1);
-  }
-  Serial.println("LoRa initialized");
-
-  // Initialize GPS
-  Serial.println("GPS initializing...");
-  
-  // Initialize OLED display (optional for debugging)
-  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
-    Serial.println(F("OLED init failed"));
-    while (1);
-  }
-  display.display();
-  delay(500);
 }
 
 void loop() {
-  // Check if there is incoming data from LoRa
-  if (LoRa.available()) {
-    String receivedData = "";
+  if (isLora) {
+    checkLoraData();
+  } else {
+    server.handleClient();
+  }
+}
 
-    // Read all available bytes
+// ------------ LoRa Receiver Functions ------------
+void setupLoraReceiver() {
+  LoRa.setPins(LORA_CS, LORA_RESET, LORA_DIO0);
+  if (!LoRa.begin(915E6)) {
+    Serial.println("LoRa receiver init failed. Check wiring.");
+    while (1);
+  }
+  Serial.println("LoRa receiver initialized.");
+}
+
+void checkLoraData() {
+  int packetSize = LoRa.parsePacket();
+  if (packetSize) {
+    String receivedData = "";
     while (LoRa.available()) {
       receivedData += (char)LoRa.read();
     }
-
-    // Print received data to Serial Monitor
-    Serial.println("Received from LoRa: " + receivedData);
-
-    // Optionally, display it on OLED or process it further
-    display.clearDisplay();
-    display.setCursor(0, 0);
-    display.print("Received from LoRa:");
-    display.setCursor(0, 10);
-    display.print(receivedData);
-    display.display();
+    
+    Serial.print("Received via LoRa: ");
+    Serial.println(receivedData);
+    
+    // Process data as needed
+    processData(receivedData);
   }
+}
 
-  // Read MPU6050 accelerometer and gyroscope data
-  sensors_event_t a, g, temp;
-  mpu.getEvent(&a, &g, &temp);
+// ------------ WiFi Receiver Functions ------------
+void setupWifiReceiver() {
+  // Create Access Point
+  WiFi.softAP(ap_ssid, ap_password);
+  Serial.println("Access Point Started");
+  Serial.print("AP IP address: ");
+  Serial.println(WiFi.softAPIP());
 
-  // Read GPS data
-  while (mySerial.available() > 0) {
-    gps.encode(mySerial.read());
+  // Setup server endpoints
+  server.on("/data", HTTP_POST, handleDataReceived);
+  server.begin();
+  Serial.println("HTTP server started");
+}
+
+void handleDataReceived() {
+  if (server.hasArg("plain")) {
+    String receivedData = server.arg("plain");
+    //Serial.print("Received via WiFi: ");
+    Serial.println(receivedData);
+    
+    
+    processData(receivedData);
+    
+    server.send(200, "text/plain", "Data received");
+  } else {
+    server.send(400, "text/plain", "No data received");
   }
+}
 
-  // If valid GPS data
-  if (gps.location.isUpdated()) {
-    Serial.print("Latitude= "); 
-    Serial.print(gps.location.lat(), 6); 
-    Serial.print(" Longitude= "); 
-    Serial.println(gps.location.lng(), 6);
-  }
-
-  // Filtered accelerometer and gyroscope data (simple example: average of last 10 readings)
-  float accX = a.acceleration.x;
-  float accY = a.acceleration.y;
-  float accZ = a.acceleration.z;
+// ------------ Common Data Processing Function ------------
+void processData(String data) {
+  // Parse the received data and take appropriate actions
+  // Example: splitting comma-separated values
   
-  // Filter logic (optional, e.g., smoothing)
-  // Here we just send raw data. You can apply advanced filtering like low-pass filtering or averaging.
-
-  // Send data over LoRa
-  String data = "Acc: " + String(accX, 2) + "," + String(accY, 2) + "," + String(accZ, 2) +
-                " | Lat: " + String(gps.location.lat(), 6) + " | Lon: " + String(gps.location.lng(), 6);
-
-  LoRa.beginPacket();
-  LoRa.print(data);
-  LoRa.endPacket();
-  Serial.println("Sent data over LoRa: " + data);
-
-  delay(1000);  // 1 second delay for next reading
+  int mpu_pos = data.indexOf("MPU=");
+  int gps_pos = data.indexOf("GPS=");
+  int batt_pos = data.indexOf("BATT=");
+  
+  String mpu_status = "";
+  String gps_data = "";
+  String battery = "";
+  
+  if (mpu_pos >= 0) {
+    mpu_status = data.substring(mpu_pos + 4, data.indexOf(",", mpu_pos));
+    Serial.println("MPU Status: " + mpu_status);
+  }
+  
+  if (gps_pos >= 0) {
+    gps_data = data.substring(gps_pos + 4, data.indexOf(",", gps_pos));
+    Serial.println("GPS Data: " + gps_data);
+  }
+  
+  if (batt_pos >= 0) {
+    battery = data.substring(batt_pos + 5);
+    Serial.println("Battery: " + battery);
+  }
+  
+  // Add your code here to do something with this data
 }

@@ -2,10 +2,11 @@ const express = require('express');
 const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
 const cors = require('cors');
+
 const app = express();
 const PORT = 4000;
 
-let latestESP32Data = ''; // Store the latest serial data
+let latestESP32Data = null; // Store latest ESP32 data as parsed JSON
 
 // Auto-detect ESP32 port
 async function findESP32Port() {
@@ -26,11 +27,10 @@ async function findESP32Port() {
   throw new Error('ESP32 port not found. Please check your USB connection.');
 }
 
-// Connect to ESP32 and listen
+// Connect to ESP32 and listen for data
 async function connectToESP32() {
   try {
     const path = await findESP32Port();
-    console.log(`✅ ESP32 detected on ${path}`);
 
     const port = new SerialPort({
       path,
@@ -40,8 +40,12 @@ async function connectToESP32() {
     const parser = port.pipe(new ReadlineParser({ delimiter: '\n' }));
 
     parser.on('data', (line) => {
-      latestESP32Data = line.trim();
-      console.log('📩 Received from ESP32:', latestESP32Data);
+      try {
+        latestESP32Data = JSON.parse(line.trim());
+        console.log('📥 ESP32 JSON:', latestESP32Data);
+      } catch (err) {
+        console.error('⚠️ Invalid JSON from ESP32:', line.trim());
+      }
     });
 
     port.on('open', () => {
@@ -63,32 +67,33 @@ function generateSensorData() {
   return {
     date: now.toLocaleDateString(),
     time: now.toLocaleTimeString(),
-    soilMoisture: 30 + Math.random() * 20,
-    displacement: Math.random() * 5,
-    rainfall: Math.random() * 30,
-    vibration: Math.random() * 15,
-    temperature: 18 + Math.random() * 12,
+    soilMoisture: parseFloat((30 + Math.random() * 20).toFixed(2)),
+    displacement: parseFloat((Math.random() * 5).toFixed(2)),
+    rainfall: parseFloat((Math.random() * 30).toFixed(2)),
+    vibration: parseFloat((Math.random() * 15).toFixed(2)),
+    temperature: parseFloat((18 + Math.random() * 12).toFixed(2))
   };
 }
 
 app.use(cors());
 
-// Dummy endpoint
+// API endpoint to return sensor + ESP32 data
 app.get('/api/sensor-data', (req, res) => {
-  const data = generateSensorData();
-  res.json(data);
+  const dummyData = generateSensorData();
+  res.json({
+    ...dummyData,
+    esp32: latestESP32Data || 'No data received yet'
+  });
 });
 
-// Endpoint to get latest ESP32 data
+// API endpoint to return only raw ESP32 data
 app.get('/data', (req, res) => {
-  res.json({ esp32: latestESP32Data });
+  res.json({ esp32: latestESP32Data || 'No data received yet' });
 });
 
 // Start server
 app.listen(PORT, () => {
   console.log(`🌐 Server is running at http://localhost:${PORT}`);
-  // Uncomment this if you want to read from ESP32
-  // connectToESP32();
   (async () => {
     try {
       await connectToESP32();

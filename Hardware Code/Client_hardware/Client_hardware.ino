@@ -1,19 +1,8 @@
-#include <Wire.h>
-#include <Adafruit_MPU6050.h>
-#include <Adafruit_SSD1306.h>
-#include <Adafruit_Sensor.h>
-#include <TinyGPS++.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
 #include <LoRa.h>
 
-// IMU (MPU6050)
-Adafruit_MPU6050 mpu;
-Adafruit_SSD1306 display = Adafruit_SSD1306(128, 64, &Wire);
 
-// GPS (Neo-6M) using HardwareSerial
-HardwareSerial mySerial(1); // Use Serial1 (you can use Serial2 or any other UART port)
-TinyGPSPlus gps;
-
-// LoRa pins
 #define LORA_SCK 5
 #define LORA_MISO 19
 #define LORA_MOSI 27
@@ -21,70 +10,118 @@ TinyGPSPlus gps;
 #define LORA_RESET 14
 #define LORA_DIO0 26
 
+const char* ssid = "ESP_96E0BD";  
+const char* password = "";        
+const char* serverIP = "192.168.4.1"; 
+bool isLora = false; 
+
 void setup() {
   Serial.begin(115200);
-  mySerial.begin(9600, SERIAL_8N1, 16, 17); // RX, TX (use correct pins)
+  Serial.println("ESP32 Sender Starting...");
 
-  // Initialize IMU
-  if (!mpu.begin()) {
-    Serial.println("MPU6050 init failed");
-    while (1);
+  if (isLora) {
+    loraStart();
+  } else {
+    wifiStart();
   }
-  Serial.println("MPU6050 found");
+}
+String generateSensorData() {
+  String mpuStatus;
+  int status = random(0, 3); 
+  if (status == 0) {
+    mpuStatus = "OK";
+  } else if (status == 1) {
+    mpuStatus = "FALL";
+  } else {
+    mpuStatus = "PENDING";
+  }
 
-  // Initialize LoRa
-  if (!LoRa.begin(915E6)) {
-    Serial.println("LoRa init failed");
-    while (1);
-  }
-  Serial.println("LoRa initialized");
+  float latitude = 13.0 + random(0, 10000) / 10000.0;  
+  float longitude = 13.0 + random(0, 10000) / 10000.0;
+  float battery = 3.5 + random(0, 70) / 100.0;
 
-  // Initialize GPS
-  Serial.println("GPS initializing...");
-  
-  // Initialize OLED display (optional for debugging)
-  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
-    Serial.println(F("OLED init failed"));
-    while (1);
-  }
-  display.display();
-  delay(500);
+  // Build JSON string
+  String json = "{";
+  json += "\"MPU\":\"" + mpuStatus + "\",";
+  json += "\"GPS\":{";
+  json += "\"lat\":" + String(latitude, 4) + ",";
+  json += "\"lon\":" + String(longitude, 4);
+  json += "},";
+  json += "\"BATT\":" + String(battery, 2);
+  json += "}";
+
+  return json;
 }
 
 void loop() {
-  // Read MPU6050 accelerometer and gyroscope data
-  sensors_event_t a, g, temp;
-  mpu.getEvent(&a, &g, &temp);
 
-  // Read GPS data
-  while (mySerial.available() > 0) {
-    gps.encode(mySerial.read());
+  String dataToSend = generateSensorData();
+
+  if (isLora) {
+    loraSend(dataToSend);
+  } else {
+    wifiSend(dataToSend);
   }
 
-  // If valid GPS data
-  if (gps.location.isUpdated()) {
-    Serial.print("Latitude= "); 
-    Serial.print(gps.location.lat(), 6); 
-    Serial.print(" Longitude= "); 
-    Serial.println(gps.location.lng(), 6);
+  delay(5000);
+}
+
+// ------------ LoRa Functions ------------
+void loraStart() {
+  LoRa.setPins(LORA_CS, LORA_RESET, LORA_DIO0);
+  if (!LoRa.begin(915E6)) {
+    Serial.println("LoRa init failed. Check wiring.");
+    while (1);
   }
+  Serial.println("LoRa sender initialized.");
+}
 
-  // Filtered accelerometer and gyroscope data (simple example: average of last 10 readings)
-  float accX = a.acceleration.x;
-  float accY = a.acceleration.y;
-  float accZ = a.acceleration.z;
-  
-  // Filter logic (optional, e.g., smoothing)
-  // Here we just send raw data. You can apply advanced filtering like low-pass filtering or averaging.
-
-  // Send data over LoRa
-  String data = "Acc: " + String(accX, 2) + "," + String(accY, 2) + "," + String(accZ, 2) +
-                " | Lat: " + String(gps.location.lat(), 6) + " | Lon: " + String(gps.location.lng(), 6);
-
+void loraSend(const String &data) {
   LoRa.beginPacket();
   LoRa.print(data);
   LoRa.endPacket();
-  Serial.println("Sent data over LoRa: " + data);
+  Serial.println("Sent via LoRa: " + data);
+}
 
-  delay(1000);  // 1 second delay for next reading
+// ------------ WiFi + HTTP Functions ------------
+void wifiStart() {
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to WiFi");
+
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+    delay(500);
+    Serial.print(".");
+    attempts++;
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\nConnected to Host!");
+    Serial.println("Local IP: " + WiFi.localIP().toString());
+  } else {
+    Serial.println("\nFailed to connect. Check SSID and try again.");
+  }
+}
+
+void wifiSend(const String &data) {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    String serverURL = "http://" + String(serverIP) + "/data";
+
+    http.begin(serverURL);
+    http.addHeader("Content-Type", "text/plain");
+
+    int responseCode = http.POST(data);
+    if (responseCode > 0) {
+      Serial.println("Server response: " + http.getString());
+    } else {
+      Serial.print("POST failed, Error: ");
+      Serial.println(responseCode);
+    }
+
+    http.end();
+  } else {
+    Serial.println("WiFi disconnected, can't send data. Trying to reconnect...");
+    wifiStart(); // Try
+  }
 }
