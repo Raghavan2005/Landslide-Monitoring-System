@@ -41,7 +41,7 @@ export default function ImageUploadSection() {
       await new Promise((res) => setTimeout(res, 1000));
 
       const fileName = selectedImage.name.toLowerCase();
-      const isLandslide = fileName.includes('land');
+      const isLandslide = fileName.includes('@');
 
       setResults({
         detected: isLandslide,
